@@ -20,7 +20,7 @@ app.use(morgan("dev"))
 
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ys20m5d.mongodb.net/?retryWrites=true&w=majority`;
 
 
@@ -34,13 +34,13 @@ const client = new MongoClient(uri, {
 });
 
 async function run() {
-    try { 
+    try {
         client.connect();
 
         const addClassCollection = client.db("harmoniaAcademyDb").collection("addClass");
 
-        
-        app.post("/addClass", async(req, res) => {
+
+        app.post("/addClass", async (req, res) => {
             const cls = req.body;
             console.log(cls)
             const result = await addClassCollection.insertOne(cls);
@@ -48,10 +48,50 @@ async function run() {
         })
 
 
-        app.get("/classes", async(req, res) => {
+        app.get("/classes", async (req, res) => {
             const result = await addClassCollection.find().toArray();
             res.send(result);
         })
+
+        // get by id
+        app.get("/class/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)}
+            const result = await addClassCollection.find(query).toArray();
+            res.send(result);
+        })
+
+        app.patch("/class/status/:id", async (req, res) => {
+            const id = req.params.id;
+            const status = req.body.status
+            console.log(status)
+            const query = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    status: status,
+                },
+            }
+
+            const update = await addClassCollection.updateOne(query, updateDoc);
+            res.send(update)
+        })
+
+        app.put("/class/feedback/:id", async (req, res) => {
+            const id = req.params.id;
+            const feedback = req.body.feedback
+            console.log(feedback)
+            const query = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    feedback: feedback, 
+                },
+            }
+            const update = await addClassCollection.updateOne(query, updateDoc);
+            res.send(update)
+        })
+
+
+        
 
 
         // Send a ping to confirm a successful connection
