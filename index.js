@@ -97,6 +97,7 @@ async function run() {
         // update my classes
         app.put("/update/:id", async (req, res) => {
             const id = req.params.id;
+            console.log("update id", id)
             const updateClass = req.body;
             const query = { _id: new ObjectId(id) }
             const options = { upsert: true }
@@ -136,7 +137,7 @@ async function run() {
             res.send(result)
         })
 
-        
+
         app.post('/user', async (req, res) => {
             const user = req.body;
             const query = { email: user.email }
@@ -153,26 +154,32 @@ async function run() {
 
 
         // Instructors
-        app.get("/instructors", async(req, res) => {
+        app.get("/instructors", async (req, res) => {
             const instructorRole = await usersCollection.find({ role: 'instructor' }).toArray();
             res.send(instructorRole)
         })
 
 
         //get class by id
+        app.post('/select', async (req, res) => {
+            const { _id } = req.body;
+            const existingUser = await selectCollection.findOne({_id});
+
+            if (existingUser) {
+                return res.send({ message: 'Class already exists' })
+            } else {
+
+                const result = await selectCollection.insertOne(req.body);
+                res.send(result);
+            }
+            console.log(existingUser)
 
 
-
-        //set select classes
-        app.post("/select", async(req, res) => {
-            const selected = req.body;
-            const result = await selectCollection.insertOne(selected)
-            res.send(result)
-        })
+        });
 
 
         // get select class
-        app.get("/selected", async(req, res) => {
+        app.get("/selected", async (req, res) => {
             const result = await selectCollection.find().toArray()
             res.send(result)
         })
