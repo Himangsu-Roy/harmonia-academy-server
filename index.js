@@ -38,6 +38,7 @@ async function run() {
         client.connect();
 
         const addClassCollection = client.db("harmoniaAcademyDb").collection("addClass");
+        const usersCollection = client.db("harmoniaAcademyDb").collection("users");
 
 
         app.post("/addClass", async (req, res) => {
@@ -56,7 +57,7 @@ async function run() {
         // get by id
         app.get("/class/:id", async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)}
+            const query = { _id: new ObjectId(id) }
             const result = await addClassCollection.find(query).toArray();
             res.send(result);
         })
@@ -83,13 +84,44 @@ async function run() {
             const query = { _id: new ObjectId(id) };
             const updateDoc = {
                 $set: {
-                    feedback: feedback, 
+                    feedback: feedback,
                 },
             }
             const update = await addClassCollection.updateOne(query, updateDoc);
             res.send(update)
         })
 
+
+        // update my classes
+        app.put("/update/:id", async (req, res) => {
+            const id = req.params.id;
+            const updateClass = req.body;
+            const query = { _id: new ObjectId(id) }
+            const options = { upsert: true }
+            const updateDoc = {
+                $set: updateClass,
+            }
+
+            const result = await addClassCollection.updateOne(query, updateDoc, options)
+            res.send(result)
+        })
+
+
+
+        // Save user email and role in DB
+        app.put('/users/:email', async (req, res) => {
+            const email = req.params.email
+            const user = req.body
+            const query = { email: email }
+            const options = { upsert: true }
+            const updateDoc = {
+                $set: user,
+            }
+            const result = await usersCollection.updateOne(query, updateDoc, options)
+            res.send(result)
+        })
+
+        
 
         
 
