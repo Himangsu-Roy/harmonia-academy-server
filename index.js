@@ -37,8 +37,10 @@ async function run() {
     try {
         client.connect();
 
+        // database collections
         const addClassCollection = client.db("harmoniaAcademyDb").collection("addClass");
         const usersCollection = client.db("harmoniaAcademyDb").collection("users");
+        const selectCollection = client.db("harmoniaAcademyDb").collection("select");
 
 
         app.post("/addClass", async (req, res) => {
@@ -155,6 +157,26 @@ async function run() {
             const instructorRole = await usersCollection.find({ role: 'instructor' }).toArray();
             res.send(instructorRole)
         })
+
+
+        //get class by id
+
+
+
+        //set select classes
+        app.post("/select", async(req, res) => {
+            const selected = req.body;
+            const result = await selectCollection.insertOne(selected)
+            res.send(result)
+        })
+
+
+        // get select class
+        app.get("/selected", async(req, res) => {
+            const result = await selectCollection.find().toArray()
+            res.send(result)
+        })
+
 
 
         // Send a ping to confirm a successful connection
