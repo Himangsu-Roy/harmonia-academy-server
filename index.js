@@ -144,10 +144,17 @@ async function run() {
                 return res.send({ message: 'user already exists' })
             }
             console.log(existingUser)
-            
+
             const result = await usersCollection.insertOne(user);
             res.send(result);
         });
+
+
+        // Instructors
+        app.get("/instructors", async(req, res) => {
+            const instructorRole = await usersCollection.find({ role: 'instructor' }).toArray();
+            res.send(instructorRole)
+        })
 
 
         // Send a ping to confirm a successful connection
