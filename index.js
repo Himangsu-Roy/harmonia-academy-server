@@ -21,6 +21,28 @@ app.use(morgan("dev"))
 
 
 
+// jwt middleware
+const verifyJWT = (req, res, next) => {
+    const authorization = req.headers.authorization
+    if (!authorization) {
+        return res.status(401).send({ error: true, message: 'unauthorized access' })
+    }
+    // bearer token
+    const token = authorization.split(' ')[1]
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res
+                .status(401)
+                .send({ error: true, message: 'unauthorized access' })
+        }
+        req.decoded = decoded
+        next()
+    })
+}
+
+
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ys20m5d.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -46,7 +68,19 @@ async function run() {
         const enrolledCollection = client.db("harmoniaAcademyDb").collection("enrolled");
 
 
-        app.post("/addClass", async (req, res) => {
+        // JWT
+        app.post('/jwt', (req, res) => {
+            const user = req.body
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+                expiresIn: '1h',
+            })
+
+            res.send({ token })
+        })
+
+
+
+        app.post("/addClass", verifyJWT, async (req, res) => {
             const cls = req.body;
             console.log(cls)
             const result = await addClassCollection.insertOne(cls);
@@ -54,7 +88,7 @@ async function run() {
         })
 
 
-        app.get("/classes", async (req, res) => {
+        app.get("/classes",  async (req, res) => {
             const result = await addClassCollection.find().toArray();
             res.send(result);
         })
@@ -99,7 +133,7 @@ async function run() {
 
 
         // update my classes
-        app.put("/update/:id", async (req, res) => {
+        app.put("/update/:id", verifyJWT, async (req, res) => {
             const id = req.params.id;
             console.log("update id", id)
             const updateClass = req.body;
@@ -116,7 +150,7 @@ async function run() {
 
 
         // Save user email and role in DB
-        app.put('/users/:email', async (req, res) => {
+        app.put('/users/:email', verifyJWT, async (req, res) => {
             const email = req.params.email
             const user = req.body
             const query = { email: email }
@@ -137,14 +171,14 @@ async function run() {
         })
 
         // get all users
-        app.get("/users", async (req, res) => {
+        app.get("/users", verifyJWT, async (req, res) => {
             const result = await usersCollection.find().toArray()
             res.send(result)
         })
 
 
         // add a user
-        app.post('/user', async (req, res) => {
+        app.post('/user', verifyJWT, async (req, res) => {
             const user = req.body;
             const query = { email: user.email }
             const existingUser = await usersCollection.findOne(query);
@@ -167,8 +201,11 @@ async function run() {
 
 
         // get select class
-        app.get("/selected", async (req, res) => {
-            const result = await selectCollection.find().toArray()
+        app.get("/selected/:email", async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email }
+            console.log(query)
+            const result = await selectCollection.find(query).toArray();
             res.send(result)
         })
 
@@ -176,36 +213,35 @@ async function run() {
         //get select class by id
         app.post('/select', async (req, res) => {
             const { _id } = req.body;
-            const existingUser = await selectCollection.findOne({_id});
+            const existingUser = await selectCollection.findOne({ _id: _id });
 
             if (existingUser) {
                 return res.send({ message: 'Class already exists' })
-            } else {
-
-                const result = await selectCollection.insertOne(req.body);
-                res.send(result);
             }
+
+            const result = await selectCollection.insertOne(req.body);
+            res.send(result);
         });
 
 
         // select class delete
-        app.delete("/selectClass/:id", async(req, res) => {
+        app.delete("/selectClass/:id", async (req, res) => {
             const id = req.params.id;
-            const result = await selectCollection.deleteOne({_id: id})
+            const result = await selectCollection.deleteOne({ _id: id })
             res.send(result)
         })
 
         // get select class by id
-        app.get("/selectClass/:id", async(req, res) => {
+        app.get("/selectClass/:id", async (req, res) => {
             const id = req.params.id;
-            const result = await selectCollection.findOne({_id: id})
+            const result = await selectCollection.findOne({ _id: id })
             res.send(result)
         })
 
 
         // create payment intent
         app.post('/create-payment-intent', async (req, res) => {
-            const {classPrice} = req.body;
+            const { classPrice } = req.body;
             console.log(classPrice)
 
             const amount = parseInt(classPrice * 100);
@@ -218,30 +254,60 @@ async function run() {
             res.send({
                 clientSecret: paymentIntent.client_secret
             })
-        }) 
- 
-
-        // payment related api
-        app.post('/payment', async (req, res) => {
-            const payment = req.body;
-            const {id} = req.body;
-
-            const insertResult = await paymentCollection.insertOne(payment);
-
-            const deleteResult = await selectCollection.deleteOne({_id: id})
-
-            res.send({ insertResult, deleteResult });  
         })
 
 
+        // payment operation
+        app.post('/payment', async (req, res) => {
+            const payment = req.body;
+            const { id } = req.body;
+
+            // Insert the payment document into the payment collection
+            const insertResult = await paymentCollection.insertOne(payment);
+
+            const updateClass = await addClassCollection.updateOne(
+                { _id: new ObjectId(id), availableSeats: { $gt: 0 } },
+                { $inc: { availableSeats: -1 } }
+            );
+
+            
+
+            const deleteResult = await selectCollection.deleteOne({ _id: id })
+
+
+            res.send({ insertResult, updateClass, deleteResult })
+        });
+
+
+
         // get enrolled Data
-        app.get("/enrolled/:email", async(req, res) => {
+        app.get("/enrolled/:email", async (req, res) => {
             const email = req.params.email;
-            const query = {email: email}
+            const query = { email: email }
             console.log(query)
             const result = await paymentCollection.find(query).toArray();
             res.send(result)
         })
+
+
+        // get payment history data
+        app.get("/payments/:email", async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email };
+            console.log(query);
+            const result = await paymentCollection
+                .find(query)
+                .sort({ date: -1 })
+                .toArray();
+            res.send(result);
+        });
+
+
+        // Popular Class
+        app.get("/popular-classes", async (req, res) => {
+            const popularClasses = await paymentCollection.find().toArray();
+            res.send(popularClasses);
+        });
 
 
         // Send a ping to confirm a successful connection
