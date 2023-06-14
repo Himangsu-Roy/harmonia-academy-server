@@ -58,7 +58,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        client.connect();
+        // client.connect();
 
         // database collections
         const addClassCollection = client.db("harmoniaAcademyDb").collection("addClass");
@@ -80,7 +80,7 @@ async function run() {
 
 
 
-        app.post("/addClass", verifyJWT, async (req, res) => {
+        app.post("/addClass", async (req, res) => {
             const cls = req.body;
             console.log(cls)
             const result = await addClassCollection.insertOne(cls);
@@ -88,7 +88,7 @@ async function run() {
         })
 
 
-        app.get("/classes",  async (req, res) => {
+        app.get("/classes", verifyJWT, async (req, res) => {
             const result = await addClassCollection.find().toArray();
             res.send(result);
         })
@@ -133,7 +133,7 @@ async function run() {
 
 
         // update my classes
-        app.put("/update/:id", verifyJWT, async (req, res) => {
+        app.put("/update/:id", async (req, res) => {
             const id = req.params.id;
             console.log("update id", id)
             const updateClass = req.body;
@@ -150,7 +150,7 @@ async function run() {
 
 
         // Save user email and role in DB
-        app.put('/users/:email', verifyJWT, async (req, res) => {
+        app.put('/users/:email', async (req, res) => {
             const email = req.params.email
             const user = req.body
             const query = { email: email }
@@ -171,22 +171,20 @@ async function run() {
         })
 
         // get all users
-        app.get("/users", verifyJWT, async (req, res) => {
+        app.get("/users", async (req, res) => {
             const result = await usersCollection.find().toArray()
             res.send(result)
         })
 
 
         // add a user
-        app.post('/user', verifyJWT, async (req, res) => {
+        app.post('/user', async (req, res) => {
             const user = req.body;
             const query = { email: user.email }
             const existingUser = await usersCollection.findOne(query);
-
             if (existingUser) {
                 return res.send({ message: 'user already exists' })
             }
-            console.log(existingUser)
 
             const result = await usersCollection.insertOne(user);
             res.send(result);
@@ -203,6 +201,7 @@ async function run() {
         // get select class
         app.get("/selected/:email", async (req, res) => {
             const email = req.params.email;
+
             const query = { email: email }
             console.log(query)
             const result = await selectCollection.find(query).toArray();
@@ -212,29 +211,35 @@ async function run() {
 
         //get select class by id
         app.post('/select', async (req, res) => {
-            const { _id } = req.body;
-            const existingUser = await selectCollection.findOne({ _id: _id });
+            // const classData = req.body;
+            const { className, email } = req.body;
+            // const { className, email } = req.query; 
+
+            const existingUser = await selectCollection.findOne({ className, email });
+
 
             if (existingUser) {
-                return res.send({ message: 'Class already exists' })
+                return res.send({ error: true })
             }
-
+            // console.log(classData)
             const result = await selectCollection.insertOne(req.body);
             res.send(result);
         });
 
 
         // select class delete
-        app.delete("/selectClass/:id", async (req, res) => {
+        app.delete("/selectedClass/:id", async (req, res) => {
             const id = req.params.id;
-            const result = await selectCollection.deleteOne({ _id: id })
+            const query = { _id: new ObjectId(id) }
+            const result = await selectCollection.deleteOne(query)
             res.send(result)
         })
 
         // get select class by id
         app.get("/selectClass/:id", async (req, res) => {
-            const id = req.params.id;
-            const result = await selectCollection.findOne({ _id: id })
+            const _id = req.params.id;
+            const query = { _id: new ObjectId(_id) }
+            const result = await selectCollection.findOne(query)
             res.send(result)
         })
 
@@ -270,7 +275,7 @@ async function run() {
                 { $inc: { availableSeats: -1 } }
             );
 
-            
+
 
             const deleteResult = await selectCollection.deleteOne({ _id: id })
 
@@ -305,9 +310,72 @@ async function run() {
 
         // Popular Class
         app.get("/popular-classes", async (req, res) => {
-            const popularClasses = await paymentCollection.find().toArray();
+            const popularClasses = await paymentCollection.aggregate([
+                {
+                    $group: {
+                        _id: '$className',
+                        count: { $sum: 1 },
+                    },
+                },
+                {
+                    $sort: { count: -1 },
+                },
+                {
+                    $limit: 6,
+                },
+            ])
+                .toArray();
+
             res.send(popularClasses);
         });
+
+
+        //get all class data for popular class
+        //popular class
+        app.get("/classfind", async (req, res) => {
+            const result = await addClassCollection.find().toArray();
+            res.send(result)
+        })
+
+
+
+        // Popular Instructor
+        app.get("/popular-instructor", async (req, res) => {
+            const popularInstructors = await paymentCollection.aggregate([
+                {
+                    $group: {
+                        _id: '$instructorName',
+                        count: { $sum: 1 },
+                    },
+                },
+                {
+                    $sort: { count: -1 },
+                },
+                {
+                    $limit: 6,
+                },
+            ])
+                .toArray();
+
+            res.send(popularInstructors);
+        });
+
+
+        //get all instructor data for popular class
+        //popular instructor
+        app.get("/instructorfind", async (req, res) => {
+            const result = await addClassCollection.find().toArray();
+            res.send(result)
+        })
+
+
+        // find instructor role
+        app.get("/user", async (req, res) => {
+            // const role = req.params.role;
+            // console.log("role===", role)
+            const result = await usersCollection.find({ role: "instructor" }).toArray()
+            res.send(result)
+        })
 
 
         // Send a ping to confirm a successful connection
